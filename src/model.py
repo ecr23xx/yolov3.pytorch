@@ -2,8 +2,6 @@ import time
 import torch
 import numpy as np
 import torch.nn as nn
-from torch.autograd import Variable
-from collections import defaultdict
 
 from layers import MaxPool1s, EmptyLayer, DetectionLayer, NMSLayer
 from utils import parse_cfg
@@ -13,8 +11,8 @@ class YOLOv3(nn.Module):
     """YOLO v3 model
 
     Args
-    - cfgfile: (str) path to yolo v3 config file  
-    - reso: (int) original image resolution  
+    - cfgfile: (str) path to yolo v3 config file
+    - reso: (int) original image resolution
     """
 
     def __init__(self, cfgfile, reso):
@@ -53,14 +51,17 @@ class YOLOv3(nn.Module):
                 kernel_size = int(block['size'])
                 padding = (kernel_size - 1) // 2 if block['pad'] else 0
                 stride = int(block['stride'])
-                conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
+                conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                                 kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
                 module.add_module("conv_{0}".format(idx), conv)
 
                 if batch_normalize != 0:
-                    module.add_module("bn_{0}".format(idx), nn.BatchNorm2d(out_channels))
+                    module.add_module("bn_{0}".format(
+                        idx), nn.BatchNorm2d(out_channels))
 
                 if activation == "leaky":  # for yolo, it's either leaky ReLU or linear
-                    module.add_module("leaky_{0}".format(idx), nn.LeakyReLU(0.1, inplace=True))
+                    module.add_module("leaky_{0}".format(
+                        idx), nn.LeakyReLU(0.1, inplace=True))
 
             # Max pooling layer
             elif block['type'] == 'maxpool':
@@ -96,7 +97,8 @@ class YOLOv3(nn.Module):
                 elif len(block['layers']) == 2:
                     start = int(block['layers'][0])
                     end = int(block['layers'][1])
-                    out_channels = out_channels_list[idx+start] + out_channels_list[end]
+                    out_channels = out_channels_list[idx +
+                                                     start] + out_channels_list[end]
 
             # Detection layer
             elif block['type'] == 'yolo':
@@ -105,13 +107,15 @@ class YOLOv3(nn.Module):
 
                 anchors = block['anchors'].split(',')
                 anchors = [int(a) for a in anchors]
-                anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors), 2)]
+                anchors = [(anchors[i], anchors[i+1])
+                           for i in range(0, len(anchors), 2)]
                 anchors = [anchors[i] for i in mask]
 
                 num_classes = int(block['classes'])
                 ignore_thresh = float(block['ignore_thresh'])
 
-                detection = DetectionLayer(anchors, num_classes, self.reso, ignore_thresh)
+                detection = DetectionLayer(
+                    anchors, num_classes, self.reso, ignore_thresh)
                 module.add_module('detection_{}'.format(idx), detection)
 
             module_list.append(module)
@@ -153,7 +157,8 @@ class YOLOv3(nn.Module):
                 if len(layers) == 1:  # layers = [-3]: output layer -3
                     x = outputs[i + (layers[0])]
 
-                elif len(layers) == 2:  # layers = [-1, 61]: cat layer -1 and No.61
+                # layers = [-1, 61]: cat layer -1 and No.61
+                elif len(layers) == 2:
                     layers[1] = layers[1] - i
                     map1 = outputs[i + layers[0]]
                     map2 = outputs[i + layers[1]]
@@ -165,11 +170,15 @@ class YOLOv3(nn.Module):
                 if self.training == True:
                     loss_part = self.module_list[i][0](x, y_true)
                     for key, value in loss_part.items():
-                        loss[key] = loss[key] + value if key in loss.keys() else value
-                        loss['total'] = loss['total'] + value if 'total' in loss.keys() else value
+                        value = value
+                        loss[key] = loss[key] + \
+                            value if key in loss.keys() else value
+                        loss['total'] = loss['total'] + \
+                            value if 'total' in loss.keys() else value
                 else:
                     x = self.module_list[i][0](x)
-                    detections = x if len(detections.size()) == 1 else torch.cat((detections, x), 1)
+                    detections = x if len(detections.size()) == 1 else torch.cat(
+                        (detections, x), 1)
                 outputs[i] = outputs[i-1]  # skip
 
         # return detection result only when evaluation
@@ -189,10 +198,10 @@ class YOLOv3(nn.Module):
 
         Args
         - path: (str) path to .weights file
-        - cut: (optinoal, int) cutting layer
+        - cutoff: (optinoal, int)
         """
         fp = open(path, 'rb')
-        header = np.fromfile(fp, dtype=np.int32, count=4)
+        header = np.fromfile(fp, dtype=np.int32, count=5)
         weights = np.fromfile(fp, dtype=np.float32)
         fp.close()
 
@@ -207,29 +216,34 @@ class YOLOv3(nn.Module):
                 break
 
             if block['type'] == "convolutional":
-                batch_normalize = int(block['batch_normalize']) if 'batch_normalize' in block else 0
+                batch_normalize = int(
+                    block['batch_normalize']) if 'batch_normalize' in block else 0
                 conv = module[0]
 
                 if batch_normalize > 0:
                     bn = module[1]
                     num_bn_biases = bn.bias.numel()
 
-                    bn_biases = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
+                    bn_biases = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
                     bn_biases = bn_biases.view_as(bn.bias.data)
                     bn.bias.data.copy_(bn_biases)
                     ptr += num_bn_biases
 
-                    bn_weights = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
+                    bn_weights = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
                     bn_weights = bn_weights.view_as(bn.weight.data)
                     bn.weight.data.copy_(bn_weights)
                     ptr += num_bn_biases
 
-                    bn_running_mean = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
+                    bn_running_mean = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
                     bn_running_mean = bn_running_mean.view_as(bn.running_mean)
                     bn.running_mean.copy_(bn_running_mean)
                     ptr += num_bn_biases
 
-                    bn_running_var = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
+                    bn_running_var = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
                     bn_running_var = bn_running_var.view_as(bn.running_var)
                     bn.running_var.copy_(bn_running_var)
                     ptr += num_bn_biases

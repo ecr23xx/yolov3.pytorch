@@ -5,7 +5,7 @@ This repository is used for object detection. The algorithm is based on [YOLOv3:
 ## News
 
 Full version of update logs could be seen in issue [#2](https://github.com/ECer23/yolov3.pytorch/issues/2)
- 
+
 * (2018/10/10) Support training on VOC dataset.
 
 ## Environments
@@ -13,6 +13,7 @@ Full version of update logs could be seen in issue [#2](https://github.com/ECer2
 * Python 3.6
 * PyTorch 0.4.1
 * CUDA (CPU is not supported)
+* pycocoapi
 
 ## Train
 
@@ -44,7 +45,7 @@ Full version of update logs could be seen in issue [#2](https://github.com/ECer2
 ### Training visualization
 
 Logging directory will be displayed when you run training scripts. You can visualize the training process by running
- 
+
 ```shell
 $ tensorboard --logdir path-to-your-logs
 ```

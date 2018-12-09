@@ -38,6 +38,10 @@ datasets = {
         'val_imgs': '/media/data_2/VOCdevkit/2007_test.txt',
         'class_names': ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'],
         'result_dir': opj(ROOT, 'metrics/voc/detections')
+    },
+    'linemod': {
+        'num_classes': 1,
+        'root': '/media/data_2/SIXDB/hinterstoisser/test/'
     }
 }
 
@@ -48,6 +52,9 @@ network = {
     },
     'coco': {
         'cfg': opj(ROOT, 'lib/yolov3-coco.cfg')
+    },
+    'linemod': {
+        'cfg': opj(ROOT, 'lib/yolov3-linemod.cfg')
     }
 }
 
@@ -56,11 +63,4 @@ evaluate = {
     'result_dir': opj(ROOT, 'assets/results')
 }
 
-# demo.py config
-demo = {
-    'images_dir': opj(ROOT, 'assets/imgs'),
-    'result_dir': opj(ROOT, 'assets/dets')
-}
-
-# draw detection's colors
 colors = {}

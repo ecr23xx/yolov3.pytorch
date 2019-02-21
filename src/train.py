@@ -24,10 +24,10 @@ def parse_arg():
     parser.add_argument('--reso', type=int, default=416,
                         help="Input image resolution")
     parser.add_argument('--lr', type=float, default=1e-3, help="Learning rate")
-    parser.add_argument('--batch', type=int, default=64, help="Batch size")
+    parser.add_argument('--bs', type=int, default=64, help="Batch size")
     parser.add_argument('--dataset', type=str, help="Dataset name",
                         choices=['voc', 'coco', 'linemod'])
-    parser.add_argument('--checkpoint', type=str, default='0.0',
+    parser.add_argument('--ckpt', type=str, default='-1.-1',
                         help="Checkpoint name in format: `epoch.iteration`")
     parser.add_argument('--gpu', type=str, default='0', help="GPU id")
     parser.add_argument('--seq', type=str, help="LINEMOD sequence number")
@@ -51,58 +51,50 @@ def train(epoch, trainloader, yolo, optimizer):
     - optimizer: (optim) optimizer
     """
     yolo.train()
-    tbar = tqdm(trainloader, ncols=80, ascii=True)
-    tbar.set_description('training')
-    for batch_idx, (paths, inputs, targets) in enumerate(tbar):
+    # tbar = tqdm(trainloader, ncols=80, ascii=True)
+    # tbar.set_description('training')
+    for batch_idx, (paths, inputs, targets) in enumerate(trainloader):
         global_step = batch_idx + epoch * len(trainloader)
 
         optimizer.zero_grad()
         inputs = inputs.cuda()
         loss = yolo(inputs, targets)
         log(writer, 'training loss', loss, global_step)
-        log(writer, 'hyper parameters', {
-            'learning_rate': optimizer.param_groups[0]['lr']
-        }, global_step)
         loss['total'].backward()
         optimizer.step()
+        # tbar.set_postfix(loss=loss['total'])
 
 
 if __name__ == '__main__':
-    # 1. Parsing arguments
-    for arg in vars(args):
-        print(arg, ':', getattr(args, arg))
-    print("log_dir :", log_dir)
-
-    # 2. Loading network
+    # Loading network
     # TODO: resume tensorboard
-    print("\n==> Loading network and data\n")
+    print("[LOG] Loading network and data")
     yolo = YOLOv3(cfg, args.reso)
-    start_epoch, start_iteration = args.checkpoint.split('.')
+    start_epoch, start_iteration = args.ckpt.split('.')
     start_epoch, start_iteration, state_dict = load_checkpoint(
         opj(config.CKPT_ROOT, args.dataset),
         int(start_epoch),
         int(start_iteration)
     )
     yolo.load_state_dict(state_dict)
-    # yolo = nn.DataParallel(yolo)
     yolo = yolo.cuda()
 
-    # 3. Preparing data
+    # Preparing data
     train_img_datasets, train_dataloader = prepare_train_dataset(
-        args.dataset, args.reso, args.batch, seq=args.seq)
+        args.dataset, args.reso, args.bs, seq=args.seq)
     val_img_datasets, val_dataloder = prepare_val_dataset(
-        args.dataset, args.reso, args.batch, seq=args.seq)
-    print("Model starts training from epoch %d iteration %d" %
+        args.dataset, args.reso, args.bs, seq=args.seq)
+    print("[LOG] Model starts training from epoch %d iteration %d" %
           (start_epoch, start_iteration))
-    print("Number of training images:", len(train_img_datasets))
-    print("Number of validation images:", len(val_img_datasets))
+    print("[LOG] Number of training images:", len(train_img_datasets))
+    print("[LOG] Number of validation images:", len(val_img_datasets))
 
-    # 4. Training
+    # Training
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, yolo.parameters()),
                           lr=args.lr, momentum=0.9, weight_decay=5e-4, nesterov=True)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
     for epoch in range(start_epoch, start_epoch+100):
-        print("\n[EPOCH]", epoch)
+        print("\n[LOG] Epoch", epoch)
         scheduler.step()
         train(epoch, train_dataloader, yolo, optimizer)
         # save_checkpoint(opj(config.CKPT_ROOT, args.dataset), epoch + 1, 0, {

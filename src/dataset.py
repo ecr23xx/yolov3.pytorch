@@ -14,13 +14,21 @@ opj = os.path.join
 
 
 class CocoDataset(CocoDetection):
+    def __init__(self, root, annFile, transform):
+        super().__init__(
+            root=root,
+            annFile=annFile,
+            transform=transform
+        )
+        self.class_map = config.datasets['coco']['category_id_mapping']
+
     def __getitem__(self, index):
         """
         Returns
-        - path: (str) image file name
-        - img: (Tensor) with size [C, H, W]
-        - TODO: memory improvements ?
-        - target_tensor: (list of Tensor) each list item with size [xc, yc, w, h, label]
+        - path: (str) Image filename
+        - img: (Tensor)
+        - annos: (Tensor) Annotation with size [100, 5]
+            5 = [xc, yc, w, h, label]
         """
         coco = self.coco
         img_id = self.ids[index]
@@ -31,14 +39,13 @@ class CocoDataset(CocoDetection):
         target = coco.loadAnns(ann_ids)
         annos = torch.zeros(len(target), 5)
         for i in range(len(target)):
-            bbox = torch.Tensor(target[i]['bbox'])  # [x1, y1, w, h]
-            label = config.datasets['coco']['category_id_mapping'][int(
-                target[i]['category_id'])]
-            annos[i, 0] = (bbox[0] + bbox[2] / 2) / w  # xc
-            annos[i, 1] = (bbox[1] + bbox[3] / 2) / h  # yc
-            annos[i, 2] = bbox[2] / w  # w
-            annos[i, 3] = bbox[3] / h  # h
-            annos[i, 4] = label  # 0-80
+            # [x1, y1, w, h] => [xc, yc, w, h]
+            bbox = torch.Tensor(target[i]['bbox'])
+            annos[i, 0] = (bbox[0] + bbox[2] / 2) / w
+            annos[i, 1] = (bbox[1] + bbox[3] / 2) / h
+            annos[i, 2] = bbox[2] / w
+            annos[i, 3] = bbox[3] / h
+            annos[i, 4] = self.class_map[int(target[i]['category_id'])]
         if self.transform is not None:
             img = self.transform(img)
         return path, img, annos
@@ -185,14 +192,27 @@ def prepare_train_dataset(name, reso, batch_size, **kwargs):
 
     if name == 'coco':
         img_datasets = CocoDataset(
-            root=path['train_imgs'], annFile=path['train_anno'], transform=transform)
+            root=path['train_imgs'],
+            annFile=path['train_anno'],
+            transform=transform
+        )
         dataloder = torch.utils.data.DataLoader(
-            img_datasets, batch_size=batch_size, shuffle=True, collate_fn=CocoDataset.collate_fn)
+            img_datasets,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=CocoDataset.collate_fn
+        )
     elif name == 'voc':
         img_datasets = VocDataset(
-            train_list=path['train_imgs'], transform=transform)
+            train_list=path['train_imgs'],
+            transform=transform
+        )
         dataloder = torch.utils.data.DataLoader(
-            img_datasets, batch_size=batch_size, shuffle=True, collate_fn=VocDataset.collate_fn)
+            img_datasets,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=VocDataset.collate_fn
+        )
     elif name == 'linemod':
         img_datasets = LinemodDataset(
             root=path['root'],
@@ -212,13 +232,13 @@ def prepare_val_dataset(name, reso, batch_size, **kwargs):
     """Prepare dataset for validation
 
     Args
-      name: (str) dataset name [tejani, hinter]
-      reso: (int) validation image resolution
-      batch_size: (int)
+    - name: (str) dataset name [tejani, hinter]
+    - reso: (int) validation image resolution
+    - batch_size: (int)
 
     Returns
-      img_datasets: (CocoDataset)
-      dataloader: (Dataloader)
+    - img_datasets: (CocoDataset)
+    - dataloader: (Dataloader)
     """
     transform = transforms.Compose([
         transforms.Resize(size=(reso, reso), interpolation=3),
@@ -229,9 +249,15 @@ def prepare_val_dataset(name, reso, batch_size, **kwargs):
 
     if name == 'coco':
         img_datasets = CocoDataset(
-            root=path['val_imgs'], annFile=path['val_anno'], transform=transform)
+            root=path['val_imgs'],
+            annFile=path['val_anno'],
+            transform=transform
+        )
         dataloder = torch.utils.data.DataLoader(
-            img_datasets, batch_size=batch_size, collate_fn=CocoDataset.collate_fn)
+            img_datasets,
+            batch_size=batch_size,
+            collate_fn=CocoDataset.collate_fn
+        )
     elif name == 'voc':
         img_datasets = VocDataset(
             train_list=path['val_imgs'], transform=transform)

@@ -3,6 +3,7 @@ import os
 import torch
 import random
 import datetime
+import calendar
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -84,33 +85,28 @@ def transform_coord(bbox, src='center', dst='corner'):
 
 
 def xywh2xyxy(bbox):
-    bbox[:, 0] -= bbox[:, 2] / 2
-    bbox[:, 1] -= bbox[:, 3] / 2
-    bbox[:, 2] += bbox[:, 0]
-    bbox[:, 3] += bbox[:, 1]
-    return bbox
+    bbox_ = bbox.clone()
+    if len(bbox_.size()) == 1:
+        bbox_ = bbox_.unsqueeze(0)
+    xc, yc = bbox_[..., 0], bbox_[..., 1]
+    half_w, half_h = bbox_[..., 2] / 2, bbox_[..., 3] / 2
+    bbox_[..., 0] = xc - half_w
+    bbox_[..., 1] = yc - half_h
+    bbox_[..., 2] = xc + 2 * half_w
+    bbox_[..., 3] = yc + 2 * half_h
+    return bbox_
 
 
-def IoU(box1, box2, format='corner', type='full'):
+def IoU(box1, box2):
     """Compute IoU between box1 and box2
 
     Args
     - box: (torch.cuda.Tensor) bboxes with size [# bboxes, 4]
-    - format: (str) bbox format
-        'corner' => [x1, y1, x2, y2]
-        'center' => [xc, yc, w, h]
-    - type: (str) IoU type
-        'full' => regular IoU
-        'part' => intersect / one bbox area
     """
     if box1.is_cuda == True:
         box1 = box1.cpu()
     if box2.is_cuda == True:
         box2 = box2.cpu()
-
-    if format == 'center':
-        box1 = transform_coord(box1)
-        box2 = transform_coord(box2)
 
     b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
     b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
@@ -126,10 +122,7 @@ def IoU(box1, box2, format='corner', type='full'):
     b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
     b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
 
-    if type == 'full':
-        return inter_area / (b1_area + b2_area - inter_area)
-    elif type == 'part':
-        return inter_area / b1_area, inter_area / b2_area
+    return inter_area / (b1_area + b2_area - inter_area)
 
 
 def draw_detection(img_path, detection, reso, names, save_path):
@@ -167,12 +160,12 @@ def draw_detection(img_path, detection, reso, names, save_path):
                 )
             x1, y1, x2, y2 = bbox[0], bbox[1], bbox[2], bbox[3]
             draw.rectangle(((x1 * w_ratio, y1 * h_ratio, x2 * w_ratio, y2 * h_ratio)),
-                            outline=config.colors[category])
+                           outline=config.colors[category])
             draw.rectangle((bbox[0] * w_ratio, bbox[1] * h_ratio - 15,
                             bbox[2] * w_ratio, bbox[1] * h_ratio),
-                            fill=config.colors[category])
+                           fill=config.colors[category])
             draw.text((bbox[0] * w_ratio + 2, bbox[1] * h_ratio - 15),
-                        caption, fill='white', font=font)
+                      caption, fill='white', font=font)
     except Exception:
         from IPython import embed
         embed()
@@ -185,22 +178,13 @@ def get_current_time():
     """Get current datetime
 
     Returns
-    - time: (str) time in format "dd-hh-mm"
+    - time: (str) time in format "month-dd"
     """
     time = str(datetime.datetime.now())
-    time = time.split('-')[-1].split('.')[0]
-    time = time.replace(' ', ':')
-    day, hour, minute, _ = time.split(':')
-    if day[-1] == '1':
-        day += 'st'
-    elif day[-1] == '2':
-        day += 'nd'
-    elif day[-1] == '3':
-        day += 'rd'
-    else:
-        day += 'th'
-    # time = day + '.' + hour + '.' + minute
-    time = day + '.' + hour
+    dhms = time.split('-')[-1].split('.')[0]
+    day, hour, minute, _ = dhms.replace(' ', ':').split(':')
+    month = calendar.month_name[int(time.split('-')[1])][:3]
+    time = month + '.' + day
     return str(time)
 
 
